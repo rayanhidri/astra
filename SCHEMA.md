@@ -42,6 +42,53 @@ A prerequisite group includes its members.
 - `(PrerequisiteGroup)-[:INCLUDES]->(Cours)` — 328 group-to-course memberships
 - `(PrerequisiteGroup)-[:INCLUDES]->(PrerequisiteGroup)` — 58 nested group-to-group (supports compound logic)
 
+### `EQUIVAUT_A`
+An equivalence between two courses — completing one satisfies prereqs that require the other.
+Stored as a single directed edge but treated as undirected in queries (`-[:EQUIVAUT_A]-`).
+
+`(Cours)-[:EQUIVAUT_A]->(Cours)` with the properties below.
+
+| Property | Type | Required | Description |
+|---|---|---|---|
+| `id` | string (UUID) | yes | Stable identifier for admin GET/DELETE by id |
+| `source` | string | yes | One of `inferred`, `official`, `request` — defines lifecycle and provenance |
+| `status` | string | yes | `active` \| `revoked` \| `expired` — only `active` affects eligibility |
+| `created_at` | datetime | yes | Set by the writer (admin endpoint or ETL pass) |
+| `created_by` | string | no | Admin email, student id, or `etl` |
+| `approved_by` | string | no | For `official` and `request` sources |
+| `approved_at` | datetime | no | For `official` and `request` sources |
+| `confidence` | float | no | For `source = inferred` only |
+| `evidence` | string | no | Similarity score, description fingerprint, justification text |
+| `session` | string | no | Term identifier (e.g. `A2026`) — required for `source = request` |
+| `request_id` | string | no | FK to a future relational `EquivalenceRequest` row |
+| `revoked_at` | datetime | no | Set by soft-delete |
+
+**Lifecycle by source:**
+
+| `source` | Producer | ETL-managed? |
+|---|---|---|
+| `inferred` | ETL similarity pass | YES — rebuilt every run |
+| `official` | Admin write API | NO — durable, only mutated by admins |
+| `request` | Student request → admin approval | NO — expired by sweep, not by ETL |
+
+ETL loaders **must never** match or delete `EQUIVAUT_A` edges except those with `source = 'inferred'`.
+
+---
+
+## Constraints & Indexes
+
+Created by `etl/setup_schema.py` (idempotent, safe to re-run).
+
+| Constraint | Definition |
+|---|---|
+| `cours_sigle_unique` | `Cours.sigle` is unique |
+| `equivaut_a_id_unique` | `EQUIVAUT_A.id` is unique |
+
+| Index | Definition |
+|---|---|
+| `equivaut_a_source` | `EQUIVAUT_A(source)` |
+| `equivaut_a_status` | `EQUIVAUT_A(status)` |
+
 ---
 
 ## Diagram

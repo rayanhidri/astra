@@ -61,15 +61,6 @@ def _build_where(filters: list) -> str:
     return ("WHERE " + " AND ".join(filters)) if filters else ""
 
 
-def _prereq_satisfied(node_ref, completed: set, groups: dict) -> bool:
-    kind, val = node_ref
-    if kind == "course":
-        return val in completed
-    group = groups[val]
-    check = all if group["type"] == "AND" else any
-    return check(_prereq_satisfied(item, completed, groups) for item in group["items"])
-
-
 def _resolve(session, node) -> Union[str, dict]:
     if "Cours" in node.labels:
         return node["sigle"]
@@ -141,48 +132,85 @@ def get_courses(
 
 # ── POST /courses/eligible ────────────────────────────────────────────────────
 
+# Single-query eligibility resolution.
+#
+# Phase 1 — expand `completed` via active EQUIVAUT_A edges (undirected, 1 hop).
+#           After this, equivalences disappear from the rest of the logic:
+#           a prereq is satisfied iff its sigle is in `expanded`.
+#
+# Phase 2 — mark satisfied LEAF prerequisite groups (all INCLUDES are Cours).
+#           AND => every child sigle in `expanded`; OR => any child in `expanded`.
+#
+# Phase 3 — mark satisfied PARENT prerequisite groups (have sub-group children).
+#           Evaluates each child against `expanded` (Cours) or `leaf_satisfied`
+#           (sub-group). Two passes suffice because the loader produces at most
+#           depth-2 nesting (AND → OR → Cours).
+#
+# Phase 4 — return program courses not in `expanded` whose REQUIERT target is
+#           absent / is a completed Cours / is a satisfied group.
+
+_ELIGIBLE_QUERY = """
+WITH $completed AS completed_raw
+
+CALL {
+    WITH completed_raw
+    UNWIND completed_raw AS s
+    OPTIONAL MATCH (:Cours {sigle: s})-[:EQUIVAUT_A {status: 'active'}]-(eq:Cours)
+    RETURN collect(DISTINCT eq.sigle) AS via_equiv
+}
+WITH [x IN completed_raw + via_equiv WHERE x IS NOT NULL] AS expanded
+
+CALL {
+    WITH expanded
+    MATCH (g:PrerequisiteGroup)
+    WHERE NOT EXISTS { (g)-[:INCLUDES]->(:PrerequisiteGroup) }
+    WITH g, expanded, [(g)-[:INCLUDES]->(c:Cours) | c.sigle] AS kids
+    WITH g.id AS gid,
+         CASE g.type
+             WHEN 'AND' THEN all(k IN kids WHERE k IN expanded)
+             WHEN 'OR'  THEN any(k IN kids WHERE k IN expanded)
+             ELSE false
+         END AS ok
+    RETURN collect(CASE WHEN ok THEN gid END) AS leaf_raw
+}
+WITH expanded, [x IN leaf_raw WHERE x IS NOT NULL] AS leaf_satisfied
+
+CALL {
+    WITH expanded, leaf_satisfied
+    MATCH (g:PrerequisiteGroup)
+    WHERE EXISTS { (g)-[:INCLUDES]->(:PrerequisiteGroup) }
+    WITH g, expanded, leaf_satisfied,
+         [(g)-[:INCLUDES]->(c:Cours) | c.sigle IN expanded]
+         + [(g)-[:INCLUDES]->(sub:PrerequisiteGroup) | sub.id IN leaf_satisfied]
+         AS bools
+    WITH g.id AS gid,
+         CASE g.type
+             WHEN 'AND' THEN all(b IN bools WHERE b)
+             WHEN 'OR'  THEN any(b IN bools WHERE b)
+             ELSE false
+         END AS ok
+    RETURN collect(CASE WHEN ok THEN gid END) AS parent_raw
+}
+WITH expanded,
+     leaf_satisfied + [x IN parent_raw WHERE x IS NOT NULL] AS satisfied_groups
+
+MATCH (c:Cours {hors_perimetre: false})
+WHERE NOT c.sigle IN expanded
+OPTIONAL MATCH (c)-[:REQUIERT]->(t)
+WITH c, t, expanded, satisfied_groups
+WHERE t IS NULL
+   OR (t:Cours AND t.sigle IN expanded)
+   OR (t:PrerequisiteGroup AND t.id IN satisfied_groups)
+RETURN c
+ORDER BY c.universite, c.sigle
+"""
+
+
 @router.post("/eligible", response_model=List[Cours])
 def get_eligible(body: EligibilityRequest):
-    completed = set(body.completed)
-
     with get_driver().session() as session:
-        course_rows = list(session.run("""
-            MATCH (c:Cours {hors_perimetre: false})
-            OPTIONAL MATCH (c)-[:REQUIERT]->(t)
-            RETURN c, t
-        """))
-        pg_rows = list(session.run("""
-            MATCH (g:PrerequisiteGroup)-[:INCLUDES]->(child)
-            RETURN g.id AS gid, g.type AS gtype, child
-        """))
-
-    groups: dict = {}
-    for row in pg_rows:
-        gid, gtype, child = row["gid"], row["gtype"], row["child"]
-        if gid not in groups:
-            groups[gid] = {"type": gtype, "items": []}
-        if "Cours" in child.labels:
-            groups[gid]["items"].append(("course", child["sigle"]))
-        else:
-            groups[gid]["items"].append(("group", child["id"]))
-
-    eligible = []
-    for row in course_rows:
-        c, t = row["c"], row["t"]
-        sigle = c["sigle"]
-        if sigle in completed:
-            continue
-        if t is None:
-            eligible.append(dict(c))
-        elif "Cours" in t.labels:
-            if t["sigle"] in completed:
-                eligible.append(dict(c))
-        else:
-            if _prereq_satisfied(("group", t["id"]), completed, groups):
-                eligible.append(dict(c))
-
-    eligible.sort(key=lambda c: (c["universite"], c["sigle"]))
-    return eligible
+        rows = session.run(_ELIGIBLE_QUERY, completed=body.completed)
+        return [dict(r["c"]) for r in rows]
 
 
 # ── GET /courses/{sigle}/prerequisite-chain ──────────────────────────────────

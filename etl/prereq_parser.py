@@ -200,6 +200,12 @@ def clear_uni_prereqs(session, universite: str):
       1. PrerequisiteGroup nodes reachable from this uni's courses
          (top-level AND/OR and nested OR sub-groups via INCLUDES).
       2. Any remaining direct REQUIERT Cours→Cours edges.
+
+    SCOPE INVARIANT: this function must only touch REQUIERT edges and
+    PrerequisiteGroup nodes. EQUIVAUT_A edges are owned by the API
+    (official, request) or by the inferred-equivalence ETL pass; both
+    paths are managed separately via etl/equivalence_loader.py. Do not
+    add any MATCH/DELETE clause for :EQUIVAUT_A here.
     """
     # Step 1a: delete nested OR sub-groups (inside AND groups)
     session.run("""
