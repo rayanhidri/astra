@@ -1,0 +1,69 @@
+site_name: Astra — Plateforme interuniversitaire
+site_description: Plateforme de découverte de cours interuniversitaire pour les étudiants en informatique de Montréal
+site_author: Rayan Hidri, Inès Amélia Chafai
+site_url: https://rayanhidri.github.io/astra
+
+theme:
+  name: material
+  language: fr
+  logo: https://www.umontreal.ca/images/vitrine_UdeM.jpg
+  favicon: https://www.umontreal.ca/favicon.ico
+  features:
+    - navigation.instant
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - search.highlight
+    - search.suggest
+    - content.tabs.link
+    - content.code.copy
+  palette:
+    - scheme: default
+      primary: deep purple
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Mode sombre
+    - scheme: slate
+      primary: deep purple
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Mode clair
+  font:
+    text: Roboto
+    code: Roboto Mono
+
+copyright: "&copy; 2026 <b>Rayan Hidri & Inès Amélia Chafai</b> &ndash; IFT3150 <br>Département d'informatique et de recherche opérationnelle <br>Université de Montréal"
+
+repo_name: ceduni/astra
+repo_url: https://github.com/ceduni/astra
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.tabbed
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - pymdownx.highlight
+  - pymdownx.inlinehilite
+  - pymdownx.emoji
+  - pymdownx.keys
+  - attr_list
+  - def_list
+  - footnotes
+  - meta
+  - toc:
+      permalink: true
+
+plugins:
+  - search
+
+nav:
+  - Vue d'ensemble: index.md
+  - Suivi: suivi.md
+  - Études préliminaires: analyse.md
+  - Réalisation: realisation.md
+  - Évaluation: evaluation.md
