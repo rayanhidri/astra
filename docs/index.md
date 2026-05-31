@@ -2,22 +2,13 @@
 title: Vue d'ensemble du projet
 ---
 
-<style>
-    @media screen and (min-width: 76em) {
-        .md-sidebar--primary {
-            display: none !important;
-        }
-    }
-</style>
-
 # Vue d'ensemble du projet
 
-!!! info "Informations générales"
-    **Session**: Été 2026  
-    **Auteur(s)**: Rayan Hidri (20248814)  
-    **Thème(s)**: Graphes de connaissances, découverte de cours, mobilité académique interuniversitaire  
-    **Superviseur(s)**: Louis-Edouard Lafontant (DIRO, Université de Montréal)  
-    **Collaborateur(s):** DIRO — Université de Montréal  
+**Session**: Été 2026  
+**Auteur(s)**: Rayan Hidri (20292238), Inès Amélia Chafai (20265344)  
+**Thème(s)**: Graphes de connaissances, découverte de cours, mobilité académique interuniversitaire  
+**Superviseur(s)**: Louis-Edouard Lafontant (DIRO, Université de Montréal)  
+**Collaborateur(s)**: DIRO — Université de Montréal  
 
 ## Description du projet
 
@@ -45,7 +36,7 @@ Les objectifs mesurables sont : agréger les données de 5 universités, modéli
 Le projet est structuré en quatre phases itératives :
 
 1. **Extraction des données (ETL)** : pipelines de scraping et normalisation pour chaque université
-2. **Modélisation du graphe** : base Neo4j avec nœuds `Cours` et `PrerequisiteGroup`, relations `REQUIERT` et `INCLUDES` encodant la logique AND/OR
+2. **Modélisation du graphe** : base Neo4j avec nœuds Cours et PrerequisiteGroup, relations REQUIERT et INCLUDES encodant la logique AND/OR
 3. **Backend API** : FastAPI exposant des endpoints de recherche, filtrage et calcul d'éligibilité via Cypher
 4. **Frontend React** : interface de découverte avec visualiseur de chaîne de prérequis (ReactFlow)
 
@@ -55,21 +46,23 @@ La qualité des données a été validée par vérification manuelle sur un éch
 
 ## Équipe
 
-| Membre | Rôle |
-|--------|------|
-| Rayan Hidri | Développeur principal — ETL, backend, frontend, modélisation Neo4j |
-| Louis-Edouard Lafontant | Superviseur — DIRO, Université de Montréal |
+| Membre | Matricule | Rôle |
+|--------|-----------|------|
+| Rayan Hidri | 20292238 | Développeur principal — ETL, backend, frontend, modélisation Neo4j |
+| Inès Amélia Chafai | 20265344 | Développeure — contribution au projet |
+| Louis-Edouard Lafontant | — | Superviseur — DIRO, Université de Montréal |
 
 ## Échéancier
 
-!!! info
-    Le suivi complet est disponible dans la page [Suivi de projet](suivi.md).
+Le suivi complet est disponible dans la page [Suivi de projet](suivi.md).
 
 | Activités | Début | Fin | Livrable | Statut |
 |-----------|-------|-----|----------|--------|
-| Ouverture de projet | 4 mai | 15 mai | Proposition de projet | ✅ Terminé |
-| Pipelines ETL (5 universités) | 15 mai | 30 mai | Données Neo4j peuplées | ✅ Terminé |
-| Backend FastAPI | 1 juin | 15 juin | 7 endpoints opérationnels | ✅ Terminé |
-| Frontend React + visualiseur | 15 juin | 10 juillet | Interface déployée | ✅ Terminé |
-| Validation données & correction | 10 juillet | 20 juillet | Rapport qualité | ✅ Terminé |
+| Définition du projet et proposition | 4 mai | 15 mai | Proposition de projet | ✅ Terminé |
+| Pipelines ETL — UdeM et McGill | 15 mai | 22 mai | Données brutes extraites | ✅ Terminé |
+| Pipelines ETL — Concordia, UQAM, Poly | 22 mai | 30 mai | Graphe Neo4j peuplé (525 cours) | ✅ Terminé |
+| Modélisation AND/OR des prérequis | 30 mai | 7 juin | PrerequisiteGroup dans Neo4j | 🔄 En cours |
+| Backend FastAPI | 7 juin | 20 juin | 7 endpoints opérationnels | ⏳ À venir |
+| Frontend React + visualiseur | 20 juin | 15 juillet | Interface déployée | ⏳ À venir |
+| Validation des données | 15 juillet | 25 juillet | Rapport qualité | ⏳ À venir |
 | Présentation + Rapport final | 7 août | 14 août | Présentation + Rapport | ⏳ À venir |
