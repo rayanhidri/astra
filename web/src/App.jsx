@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react'
 import ExplorationPage from './ExplorationPage'
 import AdminPanel from './AdminPanel'
+import EtudiantLibreView from './EtudiantLibreView'
 
 export default function App() {
   const [showAdmin, setShowAdmin] = useState(false)
+  const [showLibre, setShowLibre] = useState(false)
 
   const [completed, setCompleted] = useState(() => {
     try { return JSON.parse(localStorage.getItem('completed') || '[]') } catch { return [] }
@@ -34,8 +36,14 @@ export default function App() {
       <nav className="app-tabbar">
         <span className="app-brand">Astra</span>
         <button
+          className={`tab-btn-admin${showLibre ? ' active' : ''}`}
+          onClick={() => { setShowLibre(v => !v); setShowAdmin(false) }}
+        >
+          Cours libres
+        </button>
+        <button
           className={`tab-btn-admin${showAdmin ? ' active' : ''}`}
-          onClick={() => setShowAdmin(v => !v)}
+          onClick={() => { setShowAdmin(v => !v); setShowLibre(false) }}
         >
           Admin
         </button>
@@ -44,6 +52,8 @@ export default function App() {
       <div className="app-content">
         {showAdmin ? (
           <AdminPanel onBack={() => setShowAdmin(false)} />
+        ) : showLibre ? (
+          <EtudiantLibreView />
         ) : (
           <ExplorationPage
             completed={completed}
