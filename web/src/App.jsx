@@ -39,7 +39,7 @@ export default function App() {
           className={`tab-btn-admin${showLibre ? ' active' : ''}`}
           onClick={() => { setShowLibre(v => !v); setShowAdmin(false) }}
         >
-          Cours libres
+          Étudiant libre
         </button>
         <button
           className={`tab-btn-admin${showAdmin ? ' active' : ''}`}
