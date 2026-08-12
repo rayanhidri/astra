@@ -143,7 +143,7 @@
           "IFT2935"
         ],
         "category": [
-          "software_engineering",
+          "web",
           "data"
         ]
       },
@@ -202,9 +202,7 @@
         "credits_min": 0,
         "credits_max": 6,
         "cours": [
-          "HOR3200",
           "IFT3150",
-          "IFT3151",
           "IFT3710"
         ],
         "category": []
@@ -222,7 +220,7 @@
           "IFT2935"
         ],
         "category": [
-          "software_engineering",
+          "web",
           "data"
         ]
       },
@@ -325,7 +323,6 @@
         "credits_max": 8,
         "cours": [
           "BIN6002",
-          "BIN6003",
           "IFT6010",
           "IFT6042",
           "IFT6080",
@@ -359,11 +356,9 @@
         "credits_min": 9,
         "credits_max": 15,
         "cours": [
-          "HOR3200",
           "IFT2905",
           "IFT2935",
           "IFT3065",
-          "IFT3151",
           "IFT3155",
           "IFT3205",
           "IFT3225",
@@ -431,16 +426,13 @@
     "IFT3655",
     "IFT3700",
     "STT2700",
-    "HOR3200",
     "IFT3150",
-    "IFT3151",
     "IFT3710",
     "IFT2550",
     "IFT3550",
     "IFT3551",
     "IFT4055",
     "BIN6002",
-    "BIN6003",
     "IFT6010",
     "IFT6042",
     "IFT6080",

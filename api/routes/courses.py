@@ -38,6 +38,38 @@ def _load_programs() -> dict:
 _PROGRAMS = _load_programs()
 
 
+def _iter_leaf_segments(segments_raw: dict):
+    """Yield every leaf segment dict, handling UdeM's two-level nesting."""
+    for val in segments_raw.values():
+        if not isinstance(val, dict):
+            continue
+        if "type" in val:
+            yield val
+        else:
+            for subval in val.values():
+                if isinstance(subval, dict) and "type" in subval:
+                    yield subval
+
+
+def _build_libre_sigles() -> list:
+    """CS-relevant sigles across all program JSONs.
+    OR rule: include a sigle if it appears in at least one segment whose
+    category[] is non-empty (excludes physics, French, management, etc.
+    that only ever appear in excluded segments with category=[]).
+    """
+    included: set = set()
+    programs_dir = Path(__file__).parents[2] / "programs"
+    for f in sorted(programs_dir.glob("*.json")):
+        data = json.loads(f.read_text(encoding="utf-8"))
+        for seg in _iter_leaf_segments(data.get("segments", {})):
+            if seg.get("category"):
+                included.update(seg.get("cours", []))
+    return sorted(included)
+
+
+_LIBRE_SIGLES: list = _build_libre_sigles()
+
+
 # ── Models ────────────────────────────────────────────────────────────────────
 
 class Cours(BaseModel):
@@ -645,6 +677,146 @@ def get_program_graph(body: ProgramGraphRequest):
         "edges": edges,
         "program_sigles": tous_les_cours,
         "segments": segments,
+        "expanded_completed": expanded_completed,
+    }
+
+
+# ── POST /courses/libre-graph ────────────────────────────────────────────────
+#
+# Full prerequisite graph for the étudiant libre mode — all CS-relevant courses
+# across all 6 universities, scoped to _LIBRE_SIGLES (the 263 courses that have
+# at least one categorized segment in a program JSON).
+#
+# Same Cypher logic as program-graph; no program/orientation filter; no segments
+# in response (client builds category buckets from its own sigle→category map).
+
+class LibreGraphRequest(BaseModel):
+    completed_sigles: List[str] = []
+
+
+@router.post("/libre-graph")
+def get_libre_graph(body: LibreGraphRequest):
+    with get_driver().session() as session:
+        # ── 1. Transitive prereq subgraph from all libre sigles ───────────────
+        node_rows = list(session.run(
+            """
+            MATCH (start:Cours)
+            WHERE start.sigle IN $sigles
+            OPTIONAL MATCH (start)-[:REQUIERT|REQUIERT_CONCOMITANT|INCLUDES*1..15]->(n)
+            WITH collect(DISTINCT start) AS starts,
+                 [x IN collect(DISTINCT n) WHERE x IS NOT NULL] AS reached
+            UNWIND starts + reached AS node
+            RETURN DISTINCT node, labels(node) AS lbls
+            """,
+            sigles=_LIBRE_SIGLES,
+        ))
+
+        nodes: dict = {}
+        course_sigles: list = []
+        group_ids: list = []
+        for row in node_rows:
+            node = row["node"]
+            lbls = row["lbls"]
+            if "Cours" in lbls:
+                sigle = node["sigle"]
+                nodes[sigle] = {"id": sigle, "node_type": "course", "data": dict(node)}
+                course_sigles.append(sigle)
+            elif "PrerequisiteGroup" in lbls:
+                gid = node["id"]
+                nodes[gid] = {"id": gid, "node_type": "group", "data": {"type": node["type"]}}
+                group_ids.append(gid)
+
+        # ── 2. Edges between nodes in the subgraph ────────────────────────────
+        edges: list = []
+        edge_ids: set = set()
+        edge_rows = list(session.run(
+            """
+            MATCH (a)-[r:REQUIERT|REQUIERT_CONCOMITANT|INCLUDES]->(b)
+            WHERE (a:Cours AND a.sigle IN $course_sigles
+                   OR a:PrerequisiteGroup AND a.id IN $group_ids)
+              AND (b:Cours AND b.sigle IN $course_sigles
+                   OR b:PrerequisiteGroup AND b.id IN $group_ids)
+            RETURN DISTINCT
+                CASE WHEN a:Cours THEN a.sigle ELSE a.id END AS src,
+                type(r) AS rel_type,
+                CASE WHEN b:Cours THEN b.sigle ELSE b.id END AS tgt
+            """,
+            course_sigles=course_sigles,
+            group_ids=group_ids,
+        ))
+        for row in edge_rows:
+            src, tgt, rel = row["src"], row["tgt"], row["rel_type"]
+            relation_type = (
+                "prerequisite" if rel == "REQUIERT"
+                else "corequisite" if rel == "REQUIERT_CONCOMITANT"
+                else "includes"
+            )
+            eid = f"{src}->{tgt}:{relation_type}"
+            if eid not in edge_ids:
+                edge_ids.add(eid)
+                edges.append({"id": eid, "source": src, "target": tgt,
+                              "relation_type": relation_type})
+
+        # ── 3. Equivalences for course nodes ──────────────────────────────────
+        seen_equiv_pairs: set = set()
+        seen_eq_per_course: dict = {}
+        equiv_rows = list(session.run(
+            """
+            MATCH (c:Cours)-[r:EQUIVAUT_A]-(eq:Cours)
+            WHERE c.sigle IN $course_sigles
+              AND r.status IN ['active', 'needs_review']
+            RETURN c.sigle AS s, eq,
+                   r.source AS eq_source, r.confidence AS confidence
+            ORDER BY c.sigle,
+                     CASE r.source WHEN 'official' THEN 0 ELSE 1 END,
+                     r.confidence DESC
+            """,
+            course_sigles=course_sigles,
+        ))
+        for row in equiv_rows:
+            s = row["s"]
+            eq = row["eq"]
+            eq_sigle = eq["sigle"]
+            seen_eq_per_course.setdefault(s, set())
+            if eq_sigle in seen_eq_per_course[s]:
+                continue
+            seen_eq_per_course[s].add(eq_sigle)
+            pair = frozenset((s, eq_sigle))
+            if pair in seen_equiv_pairs:
+                continue
+            seen_equiv_pairs.add(pair)
+            if eq_sigle not in nodes:
+                data = dict(eq)
+                data["is_equivalent"] = True
+                data["source"] = row["eq_source"]
+                data["confidence"] = row["confidence"]
+                nodes[eq_sigle] = {"id": eq_sigle, "node_type": "course", "data": data}
+            eid = f"{s}<->{eq_sigle}:equivalent"
+            if eid not in edge_ids:
+                edge_ids.add(eid)
+                edges.append({"id": eid, "source": s, "target": eq_sigle,
+                              "relation_type": "equivalent", "label": "équivalent"})
+
+        # ── 4. Expand completed via active equivalences ───────────────────────
+        expanded_completed = list(body.completed_sigles)
+        if body.completed_sigles:
+            eq_res = session.run(
+                """
+                WITH $completed AS completed
+                UNWIND completed AS s
+                OPTIONAL MATCH (:Cours {sigle: s})-[eq_r:EQUIVAUT_A]-(eq:Cours)
+                WHERE eq_r.status IN ['active', 'needs_review']
+                RETURN collect(DISTINCT eq.sigle) AS equivalents
+                """,
+                completed=body.completed_sigles,
+            ).single()
+            equivalents = (eq_res["equivalents"] if eq_res else None) or []
+            expanded_completed = list(set(body.completed_sigles) | set(equivalents))
+
+    return {
+        "nodes": list(nodes.values()),
+        "edges": edges,
+        "program_sigles": _LIBRE_SIGLES,
         "expanded_completed": expanded_completed,
     }
 
